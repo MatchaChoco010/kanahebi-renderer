@@ -2,6 +2,9 @@
 
 レイトレ合宿11提出用のOptiX 9.0対応のHydraレンダラープラグインとCLIレンダラーのプロジェクトです。
 
+![kanahebi-renderer-screenshot](./183.png)
+
+レイトレ合宿11: https://sites.google.com/view/rtcamp11
 
 ## Clone repository with submodules
 
