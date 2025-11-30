@@ -1,0 +1,12 @@
+[submodule "external/vcpkg"]
+	path = external/vcpkg
+	url = https://github.com/microsoft/vcpkg
+[submodule "external/OpenUSD"]
+	path = external/OpenUSD
+	url = https://github.com/PixarAnimationStudios/OpenUSD
+[submodule "OpenUSD"]
+	path = OpenUSD
+	url = https://github.com/PixarAnimationStudios/OpenUSD
+[submodule "external/openqmc"]
+	path = external/openqmc
+	url = https://github.com/AcademySoftwareFoundation/openqmc

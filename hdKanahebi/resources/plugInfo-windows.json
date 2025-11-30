@@ -1,0 +1,22 @@
+{
+  "Plugins": [
+    {
+      "Type": "library",
+      "Name": "hdKanahebi",
+      "Root": "..",
+      "LibraryPath": "hdKanahebi.dll",
+      "ResourcePath": "resources",
+      "Info": {
+        "Types": {
+          "HdKanahebiRendererPlugin": {
+            "bases": [
+              "HdRendererPlugin"
+            ],
+            "displayName": "Kanahebi",
+            "priority": 99
+          }
+        }
+      }
+    }
+  ]
+}

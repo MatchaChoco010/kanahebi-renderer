@@ -1,0 +1,831 @@
+version: 2.1
+
+executors:
+  linux-openusd-builder:
+    docker:
+      - image: aswf/ci-base:2025.3
+    resource_class: xlarge
+    environment:
+      CUDA_HOME: /usr/local/cuda-13.0
+      OPTIX_INSTALL_DIR: /tmp/optix
+      OPTIX_ROOT: /tmp/optix
+
+  windows-openusd-builder:
+    machine:
+      image: windows-server-2022-gui:current
+    resource_class: windows.large
+
+  linux-medium-builder:
+    docker:
+      - image: aswf/ci-base:2025.3
+    resource_class: medium
+    environment:
+      CUDA_HOME: /usr/local/cuda-13.0
+      OPTIX_INSTALL_DIR: /tmp/optix
+      OPTIX_ROOT: /tmp/optix
+
+  windows-medium-builder:
+    machine:
+      image: windows-server-2022-gui:current
+    resource_class: windows.medium
+
+commands:
+  install-cuda-linux:
+    steps:
+      - run:
+          name: Install CUDA 13.0
+          command: |
+            dnf install -y 'dnf-command(config-manager)'
+            dnf config-manager --add-repo \
+              https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
+            dnf install -y \
+              cuda-nvcc-13-0 \
+              cuda-cudart-devel-13-0 \
+              cuda-driver-devel-13-0 \
+              cuda-nvrtc-devel-13-0 \
+              libcublas-devel-13-0 \
+              libcufft-devel-13-0 \
+              libcurand-devel-13-0 \
+              libcusolver-devel-13-0 \
+              libcusparse-devel-13-0
+            dnf clean all
+
+  install-optix-linux:
+    steps:
+      - run:
+          name: Setup OptiX 9.0 headers
+          command: |
+            git clone --depth 1 --branch v9.0.0 https://github.com/NVIDIA/optix-dev.git /tmp/optix
+
+  install-cuda-windows:
+    parameters:
+      version:
+        type: string
+        default: "13.0.0"
+      installer-url:
+        type: string
+        default: "https://developer.download.nvidia.com/compute/cuda/13.0.1/local_installers/cuda_13.0.1_windows.exe"
+    steps:
+      - restore_cache:
+          keys:
+            - cuda-windows-<< parameters.version >>-installer-v1
+      - run:
+          name: Download CUDA << parameters.version >>
+          shell: bash.exe
+          command: |
+            if [ ! -f "cuda_installer.exe" ]; then
+              echo "Downloading CUDA installer..."
+              curl -L --progress-bar -o cuda_installer.exe "<< parameters.installer-url >>"
+              echo "Download completed"
+            else
+              echo "Using cached installer"
+            fi
+      - save_cache:
+          key: cuda-windows-<< parameters.version >>-installer-v1
+          paths:
+            - cuda_installer.exe
+      - restore_cache:
+          keys:
+            - cuda-windows-<< parameters.version >>-full-install-v1
+      - run:
+          name: Install CUDA << parameters.version >>
+          shell: powershell.exe
+          command: |
+            $cudaPath = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0"
+
+            if (Test-Path $cudaPath) {
+              Write-Host "CUDA already installed in cache, skipping installation."
+            } else {
+              Write-Host "Installing CUDA Toolkit..."
+              Start-Process -Wait -FilePath "cuda_installer.exe" -ArgumentList "-s"
+              Write-Host "CUDA installation completed."
+            }
+          no_output_timeout: 20m
+      - run:
+          name: Setup CUDA Registry and Environment variables
+          shell: powershell.exe
+          command: |
+            $cudaPath = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0"
+
+            New-Item -Path "HKLM:\SOFTWARE\NVIDIA Corporation\CUDA Toolkit" -Force | Out-Null
+            Set-ItemProperty -Path "HKLM:\SOFTWARE\NVIDIA Corporation\CUDA Toolkit" -Name "V13.0" -Value $cudaPath
+
+            [Environment]::SetEnvironmentVariable("CUDA_PATH", $cudaPath, "Machine")
+            [Environment]::SetEnvironmentVariable("CUDA_PATH_V13_0", $cudaPath, "Machine")
+            [Environment]::SetEnvironmentVariable("CUDAToolkit_ROOT", $cudaPath, "Machine")
+            [Environment]::SetEnvironmentVariable("CUDACXX", "$cudaPath\bin\nvcc.exe", "Machine")
+
+            $currentPath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+            if ($currentPath -notlike "*$cudaPath\bin*") {
+              [Environment]::SetEnvironmentVariable("PATH", "$currentPath;$cudaPath\bin", "Machine")
+            }
+
+            Write-Host "CUDA registry and environment configuration completed."
+      - run:
+          name: Ensure CUDA Visual Studio integration
+          shell: powershell.exe
+          command: |
+            $src = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\extras\visual_studio_integration\MSBuildExtensions"
+            $dst = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Microsoft\VC\v170\BuildCustomizations"
+            if (Test-Path $src) {
+              Copy-Item "$src\*" $dst -Force
+              Write-Host "Copied CUDA BuildCustomizations to Visual Studio"
+            } else {
+              Write-Host "Missing CUDA integration source: $src"
+              exit 1
+            }
+      - run:
+          name: Verify CUDA installation
+          shell: powershell.exe
+          command: |
+            refreshenv
+            nvcc --version
+            Get-ChildItem Env:CUDA*
+      - save_cache:
+          key: cuda-windows-<< parameters.version >>-full-install-v1
+          paths:
+            - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0"
+
+  install-optix-windows:
+    steps:
+      - run:
+          name: Setup OptiX 9.0 headers
+          shell: bash.exe
+          command: |
+            git clone --depth 1 --branch v9.0.0 https://github.com/NVIDIA/optix-dev.git C:/optix
+
+  install-cmake-windows:
+    steps:
+      - run:
+          name: Install CMake
+          shell: powershell.exe
+          command: |
+            choco install cmake --version=3.31.7 -y
+            refreshenv
+      - run:
+          name: CMake version
+          shell: powershell.exe
+          command: cmake --version
+
+  install-pwsh-windows:
+    steps:
+      - run:
+          name: Install latest PowerShell Core
+          shell: powershell.exe
+          command: |
+            dotnet tool install --global PowerShell
+
+  persist-artifacts:
+    parameters:
+      artifact-name:
+        type: string
+    steps:
+      - persist_to_workspace:
+          root: .
+          paths:
+            - << parameters.artifact-name >>
+
+jobs:
+
+  openusd-linux-houdini-build:
+    executor: linux-openusd-builder
+    steps:
+      - checkout
+      - install-cuda-linux
+      - install-optix-linux
+      - run:
+          name: Setup submodules
+          command: |
+            git config --global --add safe.directory '*'
+            git submodule update --init external/vcpkg
+            git submodule update --init external/OpenUSD
+            GIT_LFS_SKIP_SMUDGE=1 git submodule update --init external/openqmc
+      - run:
+          name: Checkout OpenUSD
+          command: |
+            chmod +x scripts/checkout-usd.linux.houdini-21.0.sh
+            ./scripts/checkout-usd.linux.houdini-21.0.sh
+      - run:
+          name: Get OpenUSD commit hash
+          command: |
+            cd external/OpenUSD
+            echo "export OPENUSD_HASH=$(git rev-parse HEAD)" >> $BASH_ENV
+            source $BASH_ENV
+      - restore_cache:
+          keys:
+            - openusd-linux-houdini-21.0-v3-{{ .Environment.OPENUSD_HASH }}
+      - run:
+          name: Build OpenUSD
+          command: |
+            if [ ! -d "dependencies/OpenUSD" ]; then
+              chmod +x scripts/build-usd.linux.houdini-21.0.sh
+              ./scripts/build-usd.linux.houdini-21.0.sh -j 4
+            else
+              echo "Using cached OpenUSD"
+            fi
+          no_output_timeout: 90m
+      - save_cache:
+          key: openusd-linux-houdini-21.0-v3-{{ .Environment.OPENUSD_HASH }}
+          paths:
+            - dependencies/OpenUSD
+
+  openusd-linux-blender-build:
+    executor: linux-openusd-builder
+    steps:
+      - checkout
+      - install-cuda-linux
+      - install-optix-linux
+      - run:
+          name: Setup submodules
+          command: |
+            git config --global --add safe.directory '*'
+            git submodule update --init external/vcpkg
+            git submodule update --init external/OpenUSD
+            GIT_LFS_SKIP_SMUDGE=1 git submodule update --init external/openqmc
+      - run:
+          name: Checkout OpenUSD
+          command: |
+            chmod +x scripts/checkout-usd.linux.blender-4.5.sh
+            ./scripts/checkout-usd.linux.blender-4.5.sh
+      - run:
+          name: Get OpenUSD commit hash
+          command: |
+            cd external/OpenUSD
+            echo "export OPENUSD_HASH=$(git rev-parse HEAD)" >> $BASH_ENV
+            source $BASH_ENV
+      - restore_cache:
+          keys:
+            - openusd-linux-blender-4.5-v3-{{ .Environment.OPENUSD_HASH }}
+      - run:
+          name: Build OpenUSD
+          command: |
+            if [ ! -d "dependencies/OpenUSD" ]; then
+              chmod +x scripts/build-usd.linux.blender-4.5.sh
+              ./scripts/build-usd.linux.blender-4.5.sh -j 4
+            else
+              echo "Using cached OpenUSD"
+            fi
+          no_output_timeout: 90m
+      - save_cache:
+          key: openusd-linux-blender-4.5-v3-{{ .Environment.OPENUSD_HASH }}
+          paths:
+            - dependencies/OpenUSD
+
+  openusd-linux-cli-build:
+    executor: linux-openusd-builder
+    steps:
+      - checkout
+      - install-cuda-linux
+      - install-optix-linux
+      - run:
+          name: Setup submodules
+          command: |
+            git config --global --add safe.directory '*'
+            git submodule update --init external/vcpkg
+            git submodule update --init external/OpenUSD
+            GIT_LFS_SKIP_SMUDGE=1 git submodule update --init external/openqmc
+      - run:
+          name: Checkout OpenUSD
+          command: |
+            chmod +x scripts/checkout-usd.linux.cli.sh
+            ./scripts/checkout-usd.linux.cli.sh
+      - run:
+          name: Get OpenUSD commit hash
+          command: |
+            cd external/OpenUSD
+            echo "export OPENUSD_HASH=$(git rev-parse HEAD)" >> $BASH_ENV
+            source $BASH_ENV
+      - restore_cache:
+          keys:
+            - openusd-linux-cli-v3-{{ .Environment.OPENUSD_HASH }}
+      - run:
+          name: Build OpenUSD
+          command: |
+            if [ ! -d "dependencies/OpenUSD" ]; then
+              chmod +x scripts/build-usd.linux.cli.sh
+              ./scripts/build-usd.linux.cli.sh -j 4
+            else
+              echo "Using cached OpenUSD"
+            fi
+          no_output_timeout: 90m
+      - save_cache:
+          key: openusd-linux-cli-v3-{{ .Environment.OPENUSD_HASH }}
+          paths:
+            - dependencies/OpenUSD
+
+  build-linux-houdini:
+    executor: linux-medium-builder
+    steps:
+      - run:
+          name: Setup environment variables
+          command: |
+            echo 'export PATH=/usr/local/cuda-13.0/bin:"$PATH"' >> "$BASH_ENV"
+            echo 'export LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64:"$LD_LIBRARY_PATH"' >> "$BASH_ENV"
+            source "$BASH_ENV"
+      - checkout
+      - install-cuda-linux
+      - install-optix-linux
+      - run:
+          name: Setup submodules
+          command: |
+            git config --global --add safe.directory '*'
+            git submodule update --init external/vcpkg
+            git submodule update --init external/OpenUSD
+            GIT_LFS_SKIP_SMUDGE=1 git submodule update --init external/openqmc
+      - run:
+          name: Checkout OpenUSD
+          command: |
+            chmod +x scripts/checkout-usd.linux.houdini-21.0.sh
+            ./scripts/checkout-usd.linux.houdini-21.0.sh
+      - run:
+          name: Get OpenUSD commit hash
+          command: |
+            cd external/OpenUSD
+            echo "export OPENUSD_HASH=$(git rev-parse HEAD)" >> $BASH_ENV
+            source $BASH_ENV
+      - restore_cache:
+          keys:
+            - openusd-linux-houdini-21.0-v3-{{ .Environment.OPENUSD_HASH }}
+      - run:
+          name: Configure CMake
+          command: |
+            export PATH=/usr/local/cuda-13.0/bin:"$PATH"
+            export LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64:"$LD_LIBRARY_PATH"
+            cmake --preset houdini-21.0-linux
+      - run:
+          name: Build
+          command: |
+            export PATH=/usr/local/cuda-13.0/bin:"$PATH"
+            export LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64:"$LD_LIBRARY_PATH"
+            cmake --build --preset houdini-21.0-linux -- -j2
+      - run:
+          name: Create artifact archive
+          command: |
+            cd dist/houdini-21.0-linux
+            zip -r ../../houdini-21.0-linux.zip .
+      - store_artifacts:
+          path: houdini-21.0-linux.zip
+          destination: houdini-21.0-linux.zip
+      - persist-artifacts:
+          artifact-name: houdini-21.0-linux.zip
+
+  build-linux-blender:
+    executor: linux-medium-builder
+    steps:
+      - checkout
+      - install-cuda-linux
+      - install-optix-linux
+      - run:
+          name: Setup submodules
+          command: |
+            git config --global --add safe.directory '*'
+            git submodule update --init external/vcpkg
+            git submodule update --init external/OpenUSD
+            GIT_LFS_SKIP_SMUDGE=1 git submodule update --init external/openqmc
+      - run:
+          name: Checkout OpenUSD
+          command: |
+            chmod +x scripts/checkout-usd.linux.blender-4.5.sh
+            ./scripts/checkout-usd.linux.blender-4.5.sh
+      - run:
+          name: Get OpenUSD commit hash
+          command: |
+            cd external/OpenUSD
+            echo "export OPENUSD_HASH=$(git rev-parse HEAD)" >> $BASH_ENV
+            source $BASH_ENV
+      - restore_cache:
+          keys:
+            - openusd-linux-blender-4.5-v3-{{ .Environment.OPENUSD_HASH }}
+      - run:
+          name: Configure CMake
+          command: |
+            export PATH=/usr/local/cuda-13.0/bin:"$PATH"
+            export LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64:"$LD_LIBRARY_PATH"
+            cmake --preset blender-4.5-linux
+      - run:
+          name: Build
+          command: |
+            export PATH=/usr/local/cuda-13.0/bin:"$PATH"
+            export LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64:"$LD_LIBRARY_PATH"
+            cmake --build --preset blender-4.5-linux -- -j2
+      - run:
+          name: Create artifact archive
+          command: |
+            cd dist/blender-4.5-linux
+            zip -r ../../blender-4.5-linux.zip .
+      - store_artifacts:
+          path: blender-4.5-linux.zip
+          destination: blender-4.5-linux.zip
+      - persist-artifacts:
+          artifact-name: blender-4.5-linux.zip
+
+  build-linux-cli:
+    executor: linux-medium-builder
+    steps:
+      - checkout
+      - install-cuda-linux
+      - install-optix-linux
+      - run:
+          name: Setup submodules
+          command: |
+            git config --global --add safe.directory '*'
+            git submodule update --init external/vcpkg
+            git submodule update --init external/OpenUSD
+            GIT_LFS_SKIP_SMUDGE=1 git submodule update --init external/openqmc
+      - run:
+          name: Checkout OpenUSD
+          command: |
+            chmod +x scripts/checkout-usd.linux.cli.sh
+            ./scripts/checkout-usd.linux.cli.sh
+      - run:
+          name: Get OpenUSD commit hash
+          command: |
+            cd external/OpenUSD
+            echo "export OPENUSD_HASH=$(git rev-parse HEAD)" >> $BASH_ENV
+            source $BASH_ENV
+      - restore_cache:
+          keys:
+            - openusd-linux-cli-v3-{{ .Environment.OPENUSD_HASH }}
+      - run:
+          name: Configure CMake
+          command: |
+            export PATH=/usr/local/cuda-13.0/bin:"$PATH"
+            export LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64:"$LD_LIBRARY_PATH"
+            cmake --preset cli-linux
+      - run:
+          name: Build
+          command: |
+            export PATH=/usr/local/cuda-13.0/bin:"$PATH"
+            export LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64:"$LD_LIBRARY_PATH"
+            cmake --build --preset cli-linux -- -j2
+      - run:
+          name: Create artifact archive
+          command: |
+            cd dist/cli-linux
+            zip -r ../../cli-linux.zip .
+      - store_artifacts:
+          path: cli-linux.zip
+          destination: cli-linux.zip
+      - persist-artifacts:
+          artifact-name: cli-linux.zip
+
+  openusd-windows-houdini-build:
+    executor: windows-openusd-builder
+    steps:
+      - checkout
+      - install-cuda-windows
+      - install-optix-windows
+      - install-pwsh-windows
+      - install-cmake-windows
+      - run:
+          name: Setup submodules
+          shell: bash.exe
+          command: |
+            git submodule update --init external/vcpkg
+            git submodule update --init external/OpenUSD
+            GIT_LFS_SKIP_SMUDGE=1 git submodule update --init external/openqmc
+      - run:
+          name: Checkout OpenUSD
+          shell: powershell.exe
+          command: |
+            .\scripts\checkout-usd.windows.houdini-21.0.ps1
+      - run:
+          name: Get OpenUSD commit hash
+          shell: bash.exe
+          command: |
+            cd external/OpenUSD
+            echo "export OPENUSD_HASH=$(git rev-parse HEAD)" >> $BASH_ENV
+            source $BASH_ENV
+      - restore_cache:
+          keys:
+            - openusd-windows-houdini-21.0-v3-{{ .Environment.OPENUSD_HASH }}
+      - run:
+          name: Build OpenUSD
+          shell: pwsh.exe -ExecutionPolicy Bypass
+          command: |
+            if (!(Test-Path "dependencies/OpenUSD")) {
+              Write-Host "Building OpenUSD..."
+              .\scripts\build-usd.windows.houdini-21.0.ps1
+            } else {
+              Write-Host "Using cached OpenUSD"
+            }
+          no_output_timeout: 90m
+      - save_cache:
+          key: openusd-windows-houdini-21.0-v3-{{ .Environment.OPENUSD_HASH }}
+          paths:
+            - dependencies/OpenUSD
+
+  openusd-windows-blender-build:
+    executor: windows-openusd-builder
+    steps:
+      - checkout
+      - install-cuda-windows
+      - install-optix-windows
+      - install-pwsh-windows
+      - install-cmake-windows
+      - run:
+          name: Setup submodules
+          shell: bash.exe
+          command: |
+            git submodule update --init external/vcpkg
+            git submodule update --init external/OpenUSD
+            GIT_LFS_SKIP_SMUDGE=1 git submodule update --init external/openqmc
+      - run:
+          name: Checkout OpenUSD
+          shell: powershell.exe
+          command: |
+            .\scripts\checkout-usd.windows.blender-4.5.ps1
+      - run:
+          name: Get OpenUSD commit hash
+          shell: bash.exe
+          command: |
+            cd external/OpenUSD
+            echo "export OPENUSD_HASH=$(git rev-parse HEAD)" >> $BASH_ENV
+            source $BASH_ENV
+      - restore_cache:
+          keys:
+            - openusd-windows-blender-4.5-v4-{{ .Environment.OPENUSD_HASH }}
+      - run:
+          name: Build OpenUSD
+          shell: pwsh.exe
+          command: |
+            if (!(Test-Path "dependencies/OpenUSD")) {
+              .\scripts\build-usd.windows.blender-4.5.ps1
+            } else {
+              Write-Host "Using cached OpenUSD"
+            }
+          no_output_timeout: 90m
+      - save_cache:
+          key: openusd-windows-blender-4.5-v4-{{ .Environment.OPENUSD_HASH }}
+          paths:
+            - dependencies/OpenUSD
+
+  openusd-windows-cli-build:
+    executor: windows-openusd-builder
+    steps:
+      - checkout
+      - install-cuda-windows
+      - install-optix-windows
+      - install-pwsh-windows
+      - install-cmake-windows
+      - run:
+          name: Setup submodules
+          shell: bash.exe
+          command: |
+            git submodule update --init external/vcpkg
+            git submodule update --init external/OpenUSD
+            GIT_LFS_SKIP_SMUDGE=1 git submodule update --init external/openqmc
+      - run:
+          name: Checkout OpenUSD
+          shell: powershell.exe
+          command: |
+            .\scripts\checkout-usd.windows.cli.ps1
+      - run:
+          name: Get OpenUSD commit hash
+          shell: bash.exe
+          command: |
+            cd external/OpenUSD
+            echo "export OPENUSD_HASH=$(git rev-parse HEAD)" >> $BASH_ENV
+            source $BASH_ENV
+      - restore_cache:
+          keys:
+            - openusd-windows-cli-v3-{{ .Environment.OPENUSD_HASH }}
+      - run:
+          name: Build OpenUSD
+          shell: pwsh.exe
+          command: |
+            if (!(Test-Path "dependencies/OpenUSD")) {
+              .\scripts\build-usd.windows.cli.ps1
+            } else {
+              Write-Host "Using cached OpenUSD"
+            }
+          no_output_timeout: 90m
+      - save_cache:
+          key: openusd-windows-cli-v3-{{ .Environment.OPENUSD_HASH }}
+          paths:
+            - dependencies/OpenUSD
+
+  build-windows-houdini:
+    executor: windows-medium-builder
+    environment:
+      CUDACXX: "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe"
+      CUDAToolkit_ROOT: "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0"
+      PATH: "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin;%PATH%"
+      OPTIX_ROOT: C:/optix
+    steps:
+      - checkout
+      - install-cuda-windows
+      - install-optix-windows
+      - install-cmake-windows
+      - run:
+          name: Setup submodules
+          shell: bash.exe
+          command: |
+            git submodule update --init external/vcpkg
+            git submodule update --init external/OpenUSD
+            GIT_LFS_SKIP_SMUDGE=1 git submodule update --init external/openqmc
+      - run:
+          name: Checkout OpenUSD
+          shell: powershell.exe
+          command: |
+            .\scripts\checkout-usd.windows.houdini-21.0.ps1
+      - run:
+          name: Get OpenUSD commit hash
+          shell: bash.exe
+          command: |
+            cd external/OpenUSD
+            echo "export OPENUSD_HASH=$(git rev-parse HEAD)" >> $BASH_ENV
+            source $BASH_ENV
+      - restore_cache:
+          keys:
+            - openusd-windows-houdini-21.0-v3-{{ .Environment.OPENUSD_HASH }}
+      - run:
+          name: Configure CMake
+          shell: powershell.exe
+          command: cmake --preset houdini-21.0-windows
+      - run:
+          name: Build
+          shell: powershell.exe
+          command: cmake --build --preset houdini-21.0-windows --config Release
+      - run:
+          name: Create artifact archive
+          shell: powershell.exe
+          command: |
+            Compress-Archive -Path "dist/houdini-21.0-windows/*" -DestinationPath "houdini-21.0-windows.zip"
+      - store_artifacts:
+          path: houdini-21.0-windows.zip
+          destination: houdini-21.0-windows.zip
+      - persist-artifacts:
+          artifact-name: houdini-21.0-windows.zip
+
+  build-windows-blender:
+    executor: windows-medium-builder
+    environment:
+      CUDACXX: "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe"
+      CUDAToolkit_ROOT: "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0"
+      PATH: "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin;%PATH%"
+      OPTIX_ROOT: C:/optix
+    steps:
+      - checkout
+      - install-cuda-windows
+      - install-optix-windows
+      - install-cmake-windows
+      - run:
+          name: Setup submodules
+          shell: bash.exe
+          command: |
+            git submodule update --init external/vcpkg
+            git submodule update --init external/OpenUSD
+            GIT_LFS_SKIP_SMUDGE=1 git submodule update --init external/openqmc
+      - run:
+          name: Checkout OpenUSD
+          shell: powershell.exe
+          command: |
+            .\scripts\checkout-usd.windows.blender-4.5.ps1
+      - run:
+          name: Get OpenUSD commit hash
+          shell: bash.exe
+          command: |
+            cd external/OpenUSD
+            echo "export OPENUSD_HASH=$(git rev-parse HEAD)" >> $BASH_ENV
+            source $BASH_ENV
+      - restore_cache:
+          keys:
+            - openusd-windows-blender-4.5-v4-{{ .Environment.OPENUSD_HASH }}
+      - run:
+          name: Configure CMake
+          shell: powershell.exe
+          command: cmake --preset blender-4.5-windows
+      - run:
+          name: Build
+          shell: powershell.exe
+          command: cmake --build --preset blender-4.5-windows --config Release
+      - run:
+          name: Create artifact archive
+          shell: powershell.exe
+          command: |
+            Compress-Archive -Path "dist/blender-4.5-windows/*" -DestinationPath "blender-4.5-windows.zip"
+      - store_artifacts:
+          path: blender-4.5-windows.zip
+          destination: blender-4.5-windows.zip
+      - persist-artifacts:
+          artifact-name: blender-4.5-windows.zip
+
+  build-windows-cli:
+    executor: windows-medium-builder
+    environment:
+      CUDACXX: "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe"
+      CUDAToolkit_ROOT: "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0"
+      PATH: "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin;%PATH%"
+      OPTIX_ROOT: C:/optix
+    steps:
+      - checkout
+      - install-cuda-windows
+      - install-optix-windows
+      - install-cmake-windows
+      - run:
+          name: Setup submodules
+          shell: bash.exe
+          command: |
+            git submodule update --init external/vcpkg
+            git submodule update --init external/OpenUSD
+            GIT_LFS_SKIP_SMUDGE=1 git submodule update --init external/openqmc
+      - run:
+          name: Checkout OpenUSD
+          shell: powershell.exe
+          command: |
+            .\scripts\checkout-usd.windows.cli.ps1
+      - run:
+          name: Get OpenUSD commit hash
+          shell: bash.exe
+          command: |
+            cd external/OpenUSD
+            echo "export OPENUSD_HASH=$(git rev-parse HEAD)" >> $BASH_ENV
+            source $BASH_ENV
+      - restore_cache:
+          keys:
+            - openusd-windows-cli-v3-{{ .Environment.OPENUSD_HASH }}
+      - run:
+          name: Configure CMake
+          shell: powershell.exe
+          command: cmake --preset cli-windows
+      - run:
+          name: Build
+          shell: powershell.exe
+          command: cmake --build --preset cli-windows --config Release
+      - run:
+          name: Create artifact archive
+          shell: powershell.exe
+          command: |
+            Compress-Archive -Path "dist/cli-windows/*" -DestinationPath "cli-windows.zip"
+      - store_artifacts:
+          path: cli-windows.zip
+          destination: cli-windows.zip
+      - persist-artifacts:
+          artifact-name: cli-windows.zip
+
+  publish-github-release:
+    docker:
+      - image: cibuilds/github:0.13
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Publish Release on GitHub
+          shell: bash
+          command: |
+            mkdir release_assets
+            mv ./*.zip release_assets/
+            VERSION="${CIRCLE_BRANCH}-${CIRCLE_SHA1:0:7}"
+            ghr -t ${GITHUB_TOKEN} \
+                -u ${CIRCLE_PROJECT_USERNAME} \
+                -r ${CIRCLE_PROJECT_REPONAME} \
+                -c ${CIRCLE_SHA1} \
+                -delete \
+                ${VERSION} release_assets
+
+workflows:
+  version: 2
+
+  manual-openusd-build:
+    when: pipeline.git.branch == "main" or pipeline.git.branch == "develop"
+    jobs:
+      - approve-openusd-build:
+          type: approval
+      - openusd-linux-houdini-build:
+          requires:
+            - approve-openusd-build
+      - openusd-linux-blender-build:
+          requires:
+            - approve-openusd-build
+      - openusd-linux-cli-build:
+          requires:
+            - approve-openusd-build
+      - openusd-windows-houdini-build:
+          requires:
+            - approve-openusd-build
+      - openusd-windows-blender-build:
+          requires:
+            - approve-openusd-build
+      - openusd-windows-cli-build:
+          requires:
+            - approve-openusd-build
+
+  build-all:
+    when: pipeline.git.branch == "main" or pipeline.git.branch == "develop"
+    jobs:
+      - build-linux-houdini
+      - build-linux-blender
+      - build-linux-cli
+      - build-windows-houdini
+      - build-windows-blender
+      - build-windows-cli
+
+      - publish-github-release:
+          requires:
+            - build-linux-houdini
+            - build-linux-blender
+            - build-linux-cli
+            - build-windows-houdini
+            - build-windows-blender
+            - build-windows-cli

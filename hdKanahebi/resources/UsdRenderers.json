@@ -1,0 +1,11 @@
+{
+  "HdKanahebiRendererPlugin": {
+    "valid": true,
+    "menulabel": "Kanahebi",
+    "viewstats": [],
+    "statsdatapaths": {
+      "percentDone": "percent_complete",
+      "rendererStage": "render_stage_label"
+    }
+  }
+}

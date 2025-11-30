@@ -1,0 +1,13 @@
+schema_version = "1.0.0"
+
+id = "kanahebi_hydra_renderer"
+name = "Kanahebi Hydra Renderer"
+tagline = "Hydra renderer using Kanahebi"
+version = "0.1.0"
+type = "add-on"
+maintainer = "ORITO Itsuki <me@orito-itsuki.net>"
+license = ["MIT"]
+blender_version_min = "4.5.0"
+
+[permissions]
+files = "Access to plugin files"

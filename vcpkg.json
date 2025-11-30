@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "test-optix9",
+  "version": "0.3.0",
+  "dependencies": [
+    "stb",
+    "cli11",
+    "glm"
+  ]
+}

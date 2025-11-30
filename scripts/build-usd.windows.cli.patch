@@ -1,0 +1,12 @@
+diff --git a/pxr/imaging/hd/renderIndex.h b/pxr/imaging/hd/renderIndex.h
+index 2558bd6f9..66ef82a6a 100644
+--- a/pxr/imaging/hd/renderIndex.h
++++ b/pxr/imaging/hd/renderIndex.h
+@@ -140,6 +140,7 @@ public:
+     ///   hgiDriver = new HdDriver<Hgi*>(HgiTokens→renderDriver, hgi)
+     ///   HdRenderIndex::New(_renderDelegate, {_hgiDriver})
+     ///
++    HD_API
+     static HdRenderIndex *New(
+         HdRenderDelegate *renderDelegate, 
+         HdDriverVector const& drivers,

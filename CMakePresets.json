@@ -1,0 +1,159 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 23,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "houdini-21.0-windows",
+      "displayName": "Houdini 21.0 (Windows / MSBuild)",
+      "description": "Houdini 21.0 Release configuration with MSBuild and vcpkg on Windows.",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/houdini-21.0-windows",
+      "toolchainFile": "external/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PXR_ROOT": "${sourceDir}/dependencies/OpenUSD",
+        "PXR_VERSION_STRING": "v25.05",
+        "BUILD_TYPE": "houdini-21.0"
+      }
+    },
+    {
+      "name": "houdini-21.0-linux",
+      "displayName": "Houdini 21.0 (Linux / Ninja)",
+      "description": "Houdini 21.0 Release configuration with Ninja and vcpkg on Linux.",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/houdini-21.0-linux",
+      "toolchainFile": "external/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PXR_ROOT": "${sourceDir}/dependencies/OpenUSD",
+        "PXR_VERSION_STRING": "v25.05",
+        "BUILD_TYPE": "houdini-21.0"
+      }
+    },
+    {
+      "name": "blender-4.5-windows",
+      "displayName": "Blender 4.5 (Windows / MSBuild)",
+      "description": "Blender 4.5 Release configuration with MSBuild and vcpkg on Windows.",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/blender-4.5-windows",
+      "toolchainFile": "external/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PXR_ROOT": "${sourceDir}/dependencies/OpenUSD",
+        "PXR_VERSION_STRING": "v25.02",
+        "BUILD_TYPE": "blender-4.5"
+      }
+    },
+    {
+      "name": "blender-4.5-linux",
+      "displayName": "Blender 4.5 (Linux / Ninja)",
+      "description": "Blender 4.5 Release configuration with Ninja and vcpkg on Linux.",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/blender-4.5-linux",
+      "toolchainFile": "external/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PXR_ROOT": "${sourceDir}/dependencies/OpenUSD",
+        "PXR_VERSION_STRING": "v25.02",
+        "BUILD_TYPE": "blender-4.5"
+      }
+    },
+    {
+      "name": "cli-windows",
+      "displayName": "CLI (Windows / MSBuild)",
+      "description": "CLI Release configuration with MSBuild and vcpkg on Windows.",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/cli-windows",
+      "toolchainFile": "external/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PXR_ROOT": "${sourceDir}/dependencies/OpenUSD",
+        "PXR_VERSION_STRING": "v25.11",
+        "BUILD_TYPE": "cli"
+      }
+    },
+    {
+      "name": "cli-linux",
+      "displayName": "CLI (Linux / Ninja)",
+      "description": "CLI Release configuration with Ninja and vcpkg on Linux.",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/cli-linux",
+      "toolchainFile": "external/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PXR_ROOT": "${sourceDir}/dependencies/OpenUSD",
+        "PXR_VERSION_STRING": "v25.11",
+        "BUILD_TYPE": "cli"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "houdini-21.0-linux",
+      "displayName": "Build Houdini 21.0",
+      "configurePreset": "houdini-21.0-linux"
+    },
+    {
+      "name": "blender-4.5-linux",
+      "displayName": "Build Blender 4.5",
+      "configurePreset": "blender-4.5-linux"
+    },
+    {
+      "name": "cli-linux",
+      "displayName": "Build CLI",
+      "configurePreset": "cli-linux"
+    },
+    {
+      "name": "houdini-21.0-windows",
+      "displayName": "Build Houdini 21.0",
+      "configurePreset": "houdini-21.0-windows"
+    },
+    {
+      "name": "blender-4.5-windows",
+      "displayName": "Build Blender 4.5",
+      "configurePreset": "blender-4.5-windows"
+    },
+    {
+      "name": "cli-windows",
+      "displayName": "Build CLI",
+      "configurePreset": "cli-windows"
+    }
+  ]
+}

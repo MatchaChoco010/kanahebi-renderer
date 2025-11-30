@@ -1,0 +1,61 @@
+{
+  "name": "VFX Platform CY2025",
+  "remoteUser": "aswf",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+
+  "postAttachCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}/external/vcpkg && git config --global --add safe.directory ${containerWorkspaceFolder}/external/OpenUSD",
+
+  // NVIDIA GPU サポート（実行時に必要）
+  "runArgs": [
+    "--gpus=all",
+    "--privileged"
+  ],
+
+  // VSCode拡張機能（コンテナ内にインストール）
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools-extension-pack",
+        "ms-vscode.cmake-tools",
+        "jeff-hykin.better-cpp-syntax",
+        "nvidia.nsight-vscode-edition"
+      ],
+      "settings": {
+        "cmake.configureOnOpen": false,
+        "cmake.buildDirectory": "${workspaceFolder}/build",
+        "cmake.configureSettings": {
+          "CMAKE_CUDA_COMPILER": "/usr/local/cuda-13.0/bin/nvcc"
+        },
+        "C_Cpp.default.compilerPath": "/opt/rh/gcc-toolset-11/root/usr/bin/g++",
+        "C_Cpp.default.cppStandard": "c++17",
+        "C_Cpp.default.intelliSenseMode": "linux-gcc-x64",
+        "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+        "C_Cpp.default.includePath": [
+          "${workspaceFolder}/**",
+          "/opt/optix/include",
+          "/usr/local/cuda-13.0/include",
+          "/usr/local/include"
+        ],
+        "C_Cpp.default.defines": [
+          "_GLIBCXX_USE_CXX11_ABI=1"
+        ]
+      }
+    }
+  },
+
+  "containerEnv": {
+    "CMAKE_PREFIX_PATH": "/usr/local:/opt/optix",
+    "CC": "/opt/rh/gcc-toolset-11/root/usr/bin/gcc",
+    "CXX": "/opt/rh/gcc-toolset-11/root/usr/bin/g++",
+    "CUDA_HOME": "/usr/local/cuda-13.0",
+    "CUDAHOSTCXX": "/opt/rh/gcc-toolset-11/root/usr/bin/g++",
+    "OptiX_INSTALL_DIR": "/opt/optix",
+    "OptiX_ROOT": "/opt/optix"
+  }
+}

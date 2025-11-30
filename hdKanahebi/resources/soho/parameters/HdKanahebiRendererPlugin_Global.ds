@@ -1,0 +1,144 @@
+/// Kanahebi Render Settings (Global)
+/// Parameter definitions for Kanahebi renderer
+
+#include "$HFS/houdini/soho/parameters/CommonMacros.ds"
+{
+    name        "kanahebi"
+    label       "Kanahebi"
+    parmtag     { spare_opfilter  "!!SHOP/PROPERTIES!!" }
+    parmtag     { spare_classtags "render" }
+
+    group {
+        name  "global"
+        label "Global"
+
+    groupcollapsible {
+        name  "KanahebiRenderSettingsAPI_Sampling"
+        label "Sampling"
+        grouptag { "group_default" "1" }
+
+parm {
+        name    "xn__kanahebiglobaltargetsamplescontrol_iwbgn"
+        label   "Path Traced Samples"
+        type    string
+        default { "none" }
+        menujoin {
+            [ "import loputils" ]
+            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'int')" ]
+            language python
+        }
+        parmtag { "sidefx::look" "icon" }
+    }
+
+parm {
+        name    "xn__kanahebiglobaltargetsamples_3kbg"
+        label   "Path Traced Samples"
+        type    int
+        size    1
+        parmtag { "spare_category" "Sampling" }
+        parmtag { "uiscope"        "viewport" }
+        parmtag { "usdvaluetype"   "int" }
+
+        default { 128 }
+        range   { 1! 4096 }
+
+        disablewhen R"({ xn__kanahebiglobaltargetsamplescontrol_iwbgn == block }
+                       { xn__kanahebiglobaltargetsamplescontrol_iwbgn == none })"
+    }
+
+parm {
+        name    "xn__kanahebiglobaldepthcontrol_hjbgf"
+        label   "Path Traced Depth"
+        type    string
+        default { "none" }
+        menujoin {
+            [ "import loputils" ]
+            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'int')" ]
+            language python
+        }
+        parmtag { "sidefx::look" "icon" }
+    }
+
+parm {
+        name    "xn__kanahebiglobaldepth_26ag"
+        label   "Path Traced Depth"
+        type    int
+        size    1
+        parmtag { "spare_category" "Sampling" }
+        parmtag { "uiscope"        "viewport" }
+        parmtag { "usdvaluetype"   "int" }
+
+        default { 16 }
+        range   { 1! 64 }
+
+        disablewhen R"({ xn__kanahebiglobaldepthcontrol_hjbgf == block }
+                       { xn__kanahebiglobaldepthcontrol_hjbgf == none })"
+    }
+
+    } # groupcollapsible
+
+    groupcollapsible {
+        name  "KanahebiRenderSettingsAPI_Film"
+        label "Film"
+        grouptag { "group_default" "1" }
+
+parm {
+        name    "xn__kanahebiglobalexposurecontrol_dobgi"
+        label   "Exposure"
+        type    string
+        default { "none" }
+        menujoin {
+            [ "import loputils" ]
+            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'float')" ]
+            language python
+        }
+        parmtag { "sidefx::look" "icon" }
+    }
+
+parm {
+        name    "xn__kanahebiglobalexposure_ycbg"
+        label   "Exposure"
+        type    float
+        size    1
+        parmtag { "spare_category" "Film" }
+        parmtag { "uiscope"        "viewport" }
+        parmtag { "usdvaluetype"   "float" }
+
+        default { 1.0 }
+        range   { 0.0 100.0 }
+
+        disablewhen R"({ xn__kanahebiglobalexposurecontrol_dobgi == block }
+                       { xn__kanahebiglobalexposurecontrol_dobgi == none })"
+    }
+
+parm {
+        name    "xn__kanahebiglobalfilmtransparentcontrol_rzbgp"
+        label   "Film Transparent"
+        type    string
+        default { "none" }
+        menujoin {
+            [ "import loputils" ]
+            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
+            language python
+        }
+        parmtag { "sidefx::look" "icon" }
+    }
+
+parm {
+        name    "xn__kanahebiglobalfilmtransparent_dobg"
+        label   "Film Transparent"
+        type    toggle
+        size    1
+        parmtag { "spare_category" "Film" }
+        parmtag { "uiscope"        "viewport" }
+        parmtag { "usdvaluetype"   "bool" }
+
+        default { 0 }
+
+        disablewhen R"({ xn__kanahebiglobalfilmtransparentcontrol_rzbgp == block }
+                       { xn__kanahebiglobalfilmtransparentcontrol_rzbgp == none })"
+    }
+
+    } # groupcollapsible
+    } # group
+}

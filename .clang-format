@@ -1,0 +1,13 @@
+Language: Cpp
+BasedOnStyle: Chromium
+
+IndentWidth: 4
+TabWidth: 4
+ColumnLimit: 120
+UseTab: Never
+AccessModifierOffset: -4
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 8
+
+NamespaceIndentation: All
+CompactNamespaces: true
